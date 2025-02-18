@@ -1,28 +1,27 @@
 #!/bin/sh
 set -e
 
-echo "[*] Bisq Seednode installation script"
+echo "[*] Haveno Seednode installation script"
 
 ##### change paths if necessary for your system
 
 ROOT_USER=root
 ROOT_GROUP=root
-ROOT_PKG="build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 git vim screen ufw"
+ROOT_PKG="build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 git vim screen ufw openjdk-21-jdk"
 ROOT_HOME=/root
 
 SYSTEMD_SERVICE_HOME=/etc/systemd/system
 SYSTEMD_ENV_HOME=/etc/default
 
-BISQ_REPO_URL=https://github.com/bisq-network/bisq
-BISQ_REPO_NAME=bisq
-BISQ_REPO_TAG=master
-BISQ_LATEST_RELEASE=$(curl -s https://api.github.com/repos/bisq-network/bisq/releases/latest|grep tag_name|head -1|cut -d '"' -f4)
-BISQ_HOME=/bisq
-BISQ_USER=bisq
+HAVENO_REPO_URL=https://github.com/haveno-dex/haveno
+HAVENO_REPO_NAME=haveno
+HAVENO_REPO_TAG=master
+HAVENO_LATEST_RELEASE=$(curl -s https://api.github.com/repos/haveno-dex/haveno/releases/latest|grep tag_name|head -1|cut -d '"' -f4)
+HAVENO_HOME=/haveno
+HAVENO_USER=haveno
 
-# by default, this script will build and setup bitcoin fullnode
-# if you want to use an existing bitcoin fullnode, see next section
-BITCOIN_INSTALL=true
+# by default, this script will not build and setup bitcoin full-node
+BITCOIN_INSTALL=false
 BITCOIN_REPO_URL=https://github.com/bitcoin/bitcoin
 BITCOIN_REPO_NAME=bitcoin
 BITCOIN_REPO_TAG=$(curl -s https://api.github.com/repos/bitcoin/bitcoin/releases/latest|grep tag_name|head -1|cut -d '"' -f4)
@@ -60,24 +59,18 @@ sudo -H -i -u "${ROOT_USER}" DEBIAN_FRONTEND=noninteractive apt-get upgrade -qq 
 echo "[*] Installing base packages"
 sudo -H -i -u "${ROOT_USER}" DEBIAN_FRONTEND=noninteractive apt-get install -qq -y ${ROOT_PKG}
 
-echo "[*] Installing Git LFS"
-sudo -H -i -u "${ROOT_USER}" apt-get install git-lfs
-sudo -H -i -u "${ROOT_USER}" git lfs install
-
-echo "[*] Cloning Bisq repo"
+echo "[*] Cloning Haveno repo"
 sudo -H -i -u "${ROOT_USER}" git config --global advice.detachedHead false
-sudo -H -i -u "${ROOT_USER}" git clone --branch "${BISQ_REPO_TAG}" "${BISQ_REPO_URL}" "${ROOT_HOME}/${BISQ_REPO_NAME}"
+sudo -H -i -u "${ROOT_USER}" git clone --branch "${HAVENO_REPO_TAG}" "${HAVENO_REPO_URL}" "${ROOT_HOME}/${HAVENO_REPO_NAME}"
 
 echo "[*] Installing Tor"
-sudo -H -i -u "${ROOT_USER}" wget -qO- https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | gp
-g --dearmor | tee /usr/share/keyrings/tor-archive-keyring.gpg >/dev/null
-sudo -H -i -u "${ROOT_USER}" echo "deb [arch=amd64 signed-by=/usr/share/keyrings/tor-archive-keyring.gpg] https://deb.torproject.o
-rg/torproject.org focal main" > /etc/apt/sources.list.d/tor.list
+sudo -H -i -u "${ROOT_USER}" wget -qO- https://deb.torproject.org/torproject.org/A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89.asc | sudo gpg --dearmor | sudo tee /usr/share/keyrings/tor-archive-keyring.gpg >/dev/null
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/tor-archive-keyring.gpg] https://deb.torproject.org/torproject.org focal main" | sudo -H -i -u "${ROOT_USER}" tee /etc/apt/sources.list.d/tor.list
 sudo -H -i -u "${ROOT_USER}" DEBIAN_FRONTEND=noninteractive apt-get update -q
 sudo -H -i -u "${ROOT_USER}" DEBIAN_FRONTEND=noninteractive apt-get install -qq -y ${TOR_PKG}
 
 echo "[*] Installing Tor configuration"
-sudo -H -i -u "${ROOT_USER}" install -c -m 644 "${ROOT_HOME}/${BISQ_REPO_NAME}/seednode/torrc" "${TOR_HOME}/torrc"
+sudo -H -i -u "${ROOT_USER}" install -c -m 644 "${ROOT_HOME}/${HAVENO_REPO_NAME}/seednode/torrc" "${TOR_HOME}/torrc"
 
 if [ "${BITCOIN_INSTALL}" = true ];then
 
@@ -103,8 +96,8 @@ if [ "${BITCOIN_INSTALL}" = true ];then
 	sudo -H -i -u "${ROOT_USER}" sh -c "cd ${BITCOIN_HOME}/${BITCOIN_REPO_NAME} && make install >/dev/null"
 
 	echo "[*] Installing Bitcoin configuration"
-	sudo -H -i -u "${ROOT_USER}" install -c -o "${BITCOIN_USER}" -g "${BITCOIN_GROUP}" -m 644 "${ROOT_HOME}/${BISQ_REPO_NAME}/seednode/bitcoin.conf" "${BITCOIN_HOME}/bitcoin.conf"
-	sudo -H -i -u "${ROOT_USER}" install -c -o "${BITCOIN_USER}" -g "${BITCOIN_GROUP}" -m 755 "${ROOT_HOME}/${BISQ_REPO_NAME}/seednode/blocknotify.sh" "${BITCOIN_HOME}/blocknotify.sh"
+	sudo -H -i -u "${ROOT_USER}" install -c -o "${BITCOIN_USER}" -g "${BITCOIN_GROUP}" -m 644 "${ROOT_HOME}/${HAVENO_REPO_NAME}/seednode/bitcoin.conf" "${BITCOIN_HOME}/bitcoin.conf"
+	sudo -H -i -u "${ROOT_USER}" install -c -o "${BITCOIN_USER}" -g "${BITCOIN_GROUP}" -m 755 "${ROOT_HOME}/${HAVENO_REPO_NAME}/seednode/blocknotify.sh" "${BITCOIN_HOME}/blocknotify.sh"
 
 	echo "[*] Generating Bitcoin RPC credentials"
 	BITCOIN_RPC_USER=$(head -150 /dev/urandom | md5sum | awk '{print $1}')
@@ -113,57 +106,51 @@ if [ "${BITCOIN_INSTALL}" = true ];then
 	sudo sed -i -e "s/__BITCOIN_RPC_PASS__/${BITCOIN_RPC_PASS}/" "${BITCOIN_HOME}/bitcoin.conf"
 
 	echo "[*] Installing Bitcoin init scripts"
-	sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${ROOT_HOME}/${BISQ_REPO_NAME}/seednode/bitcoin.service" "${SYSTEMD_SERVICE_HOME}"
+	sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${ROOT_HOME}/${HAVENO_REPO_NAME}/seednode/bitcoin.service" "${SYSTEMD_SERVICE_HOME}"
 
 fi
 
-echo "[*] Creating Bisq user with Tor access"
-sudo -H -i -u "${ROOT_USER}" useradd -d "${BISQ_HOME}" -G "${TOR_GROUP}" "${BISQ_USER}"
+echo "[*] Creating Haveno user with Tor access"
+sudo -H -i -u "${ROOT_USER}" useradd -d "${HAVENO_HOME}" -G "${TOR_GROUP}" "${HAVENO_USER}"
 
-echo "[*] Creating Bisq homedir"
-sudo -H -i -u "${ROOT_USER}" mkdir -p "${BISQ_HOME}"
-sudo -H -i -u "${ROOT_USER}" chown "${BISQ_USER}":"${BISQ_GROUP}" ${BISQ_HOME}
+echo "[*] Creating Haveno homedir"
+sudo -H -i -u "${ROOT_USER}" mkdir -p "${HAVENO_HOME}"
+sudo -H -i -u "${ROOT_USER}" chown "${HAVENO_USER}":"${HAVENO_GROUP}" ${HAVENO_HOME}
 
-echo "[*] Moving Bisq repo"
-sudo -H -i -u "${ROOT_USER}" mv "${ROOT_HOME}/${BISQ_REPO_NAME}" "${BISQ_HOME}/${BISQ_REPO_NAME}"
-sudo -H -i -u "${ROOT_USER}" chown -R "${BISQ_USER}:${BISQ_GROUP}" "${BISQ_HOME}/${BISQ_REPO_NAME}"
+echo "[*] Moving Haveno repo"
+sudo -H -i -u "${ROOT_USER}" mv "${ROOT_HOME}/${HAVENO_REPO_NAME}" "${HAVENO_HOME}/${HAVENO_REPO_NAME}"
+sudo -H -i -u "${ROOT_USER}" chown -R "${HAVENO_USER}:${HAVENO_GROUP}" "${HAVENO_HOME}/${HAVENO_REPO_NAME}"
 
-echo "[*] Installing OpenJDK 10.0.2 from Bisq repo"
-sudo -H -i -u "${ROOT_USER}" "${BISQ_HOME}/${BISQ_REPO_NAME}/scripts/install_java.sh"
-
-echo "[*] Installing Bisq init script"
-sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${BISQ_HOME}/${BISQ_REPO_NAME}/seednode/bisq.service" "${SYSTEMD_SERVICE_HOME}/bisq.service"
+echo "[*] Installing Haveno init script"
+sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${HAVENO_HOME}/${HAVENO_REPO_NAME}/seednode/haveno-seednode.service" "${SYSTEMD_SERVICE_HOME}/haveno-seednode.service"
 if [ "${BITCOIN_INSTALL}" = true ];then
-	sudo sed -i -e "s/#Requires=bitcoin.service/Requires=bitcoin.service/" "${SYSTEMD_SERVICE_HOME}/bisq.service"
-	sudo sed -i -e "s/#BindsTo=bitcoin.service/BindsTo=bitcoin.service/" "${SYSTEMD_SERVICE_HOME}/bisq.service"
+	sudo sed -i -e "s/#Requires=bitcoin.service/Requires=bitcoin.service/" "${SYSTEMD_SERVICE_HOME}/haveno-seednode.service"
+	sudo sed -i -e "s/#BindsTo=bitcoin.service/BindsTo=bitcoin.service/" "${SYSTEMD_SERVICE_HOME}/haveno-seednode.service"
 fi
-sudo sed -i -e "s/__BISQ_REPO_NAME__/${BISQ_REPO_NAME}/" "${SYSTEMD_SERVICE_HOME}/bisq.service"
-sudo sed -i -e "s!__BISQ_HOME__!${BISQ_HOME}!" "${SYSTEMD_SERVICE_HOME}/bisq.service"
+sudo sed -i -e "s/__HAVENO_REPO_NAME__/${HAVENO_REPO_NAME}/" "${SYSTEMD_SERVICE_HOME}/haveno-seednode.service"
+sudo sed -i -e "s!__HAVENO_HOME__!${HAVENO_HOME}!" "${SYSTEMD_SERVICE_HOME}/haveno-seednode.service"
 
-echo "[*] Installing Bisq environment file with Bitcoin RPC credentials"
-sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${BISQ_HOME}/${BISQ_REPO_NAME}/seednode/bisq.env" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_P2P_HOST__/${BITCOIN_P2P_HOST}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_P2P_PORT__/${BITCOIN_P2P_PORT}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_RPC_HOST__/${BITCOIN_RPC_HOST}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_RPC_PORT__/${BITCOIN_RPC_PORT}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_RPC_USER__/${BITCOIN_RPC_USER}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s/__BITCOIN_RPC_PASS__/${BITCOIN_RPC_PASS}/" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s!__BISQ_APP_NAME__!${BISQ_APP_NAME}!" "${SYSTEMD_ENV_HOME}/bisq.env"
-sudo sed -i -e "s!__BISQ_HOME__!${BISQ_HOME}!" "${SYSTEMD_ENV_HOME}/bisq.env"
+echo "[*] Installing Haveno environment file with Bitcoin RPC credentials"
+sudo -H -i -u "${ROOT_USER}" install -c -o "${ROOT_USER}" -g "${ROOT_GROUP}" -m 644 "${HAVENO_HOME}/${HAVENO_REPO_NAME}/seednode/haveno.env" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_P2P_HOST__/${BITCOIN_P2P_HOST}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_P2P_PORT__/${BITCOIN_P2P_PORT}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_RPC_HOST__/${BITCOIN_RPC_HOST}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_RPC_PORT__/${BITCOIN_RPC_PORT}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_RPC_USER__/${BITCOIN_RPC_USER}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s/__BITCOIN_RPC_PASS__/${BITCOIN_RPC_PASS}/" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s!__HAVENO_APP_NAME__!${HAVENO_APP_NAME}!" "${SYSTEMD_ENV_HOME}/haveno.env"
+sudo sed -i -e "s!__HAVENO_HOME__!${HAVENO_HOME}!" "${SYSTEMD_ENV_HOME}/haveno.env"
 
-echo "[*] Checking out Bisq ${BISQ_LATEST_RELEASE}"
-sudo -H -i -u "${BISQ_USER}" sh -c "cd ${BISQ_HOME}/${BISQ_REPO_NAME} && git checkout ${BISQ_LATEST_RELEASE}"
+echo "[*] Checking out Haveno ${HAVENO_LATEST_RELEASE}"
+sudo -H -i -u "${HAVENO_USER}" sh -c "cd ${HAVENO_HOME}/${HAVENO_REPO_NAME} && git checkout ${HAVENO_LATEST_RELEASE}"
 
-echo "[*] Performing Git LFS pull"
-sudo -H -i -u "${BISQ_USER}" sh -c "cd ${BISQ_HOME}/${BISQ_REPO_NAME} && git lfs pull"
-
-echo "[*] Building Bisq from source"
-sudo -H -i -u "${BISQ_USER}" sh -c "cd ${BISQ_HOME}/${BISQ_REPO_NAME} && ./gradlew build -x test < /dev/null" # redirect from /dev/null is necessary to workaround gradlew non-interactive shell hanging issue
+echo "[*] Building Haveno from source"
+sudo -H -i -u "${HAVENO_USER}" sh -c "cd ${HAVENO_HOME}/${HAVENO_REPO_NAME} && ./gradlew build -x test < /dev/null" # redirect from /dev/null is necessary to workaround gradlew non-interactive shell hanging issue
 
 echo "[*] Updating systemd daemon configuration"
 sudo -H -i -u "${ROOT_USER}" systemctl daemon-reload
 sudo -H -i -u "${ROOT_USER}" systemctl enable tor.service
-sudo -H -i -u "${ROOT_USER}" systemctl enable bisq.service
+sudo -H -i -u "${ROOT_USER}" systemctl enable haveno-seednode.service
 if [ "${BITCOIN_INSTALL}" = true ];then
 	sudo -H -i -u "${ROOT_USER}" systemctl enable bitcoin.service
 fi
@@ -184,14 +171,14 @@ fi
 
 echo "[*] Adding notes to motd"
 sudo -H -i -u "${ROOT_USER}" sh -c 'echo " " >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "Bisq Seednode instructions:" >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "https://github.com/bisq-network/bisq/tree/master/seednode" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "Haveno Seednode instructions:" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "https://github.com/haveno-dex/haveno/tree/master/seednode" >> /etc/motd'
 sudo -H -i -u "${ROOT_USER}" sh -c 'echo " " >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "How to check logs for Bisq-Seednode service:" >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "sudo journalctl --no-pager --unit bisq" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "How to check logs for Haveno-Seednode service:" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "sudo journalctl --no-pager --unit haveno-seednode" >> /etc/motd'
 sudo -H -i -u "${ROOT_USER}" sh -c 'echo " " >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "How to restart Bisq-Seednode service:" >> /etc/motd'
-sudo -H -i -u "${ROOT_USER}" sh -c 'echo "sudo service bisq restart" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "How to restart Haveno-Seednode service:" >> /etc/motd'
+sudo -H -i -u "${ROOT_USER}" sh -c 'echo "sudo service haveno-seednode restart" >> /etc/motd'
 
 echo '[*] Done!'
 

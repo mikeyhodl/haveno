@@ -1,4 +1,4 @@
-:: This script will download and install the appropriate JDK for use with Bisq development.
+:: This script will download and install the appropriate JDK for use with Haveno development.
 :: It will also configure it as the default system JDK.
 :: If you need to change to another default JDK for another purpose later, you just need to
 :: change the JAVA_HOME environment variable. For example, use the following command:
@@ -25,9 +25,9 @@ cd /D "%~dp0"
 
 title Install Java
 
-set jdk_version=11.0.2
+set jdk_version=21.0.2
 set jdk_filename=openjdk-%jdk_version%_windows-x64_bin
-set jdk_url=https://download.java.net/java/GA/jdk11/9/GPL/openjdk-11.0.2_windows-x64_bin.zip
+set jdk_url=https://download.java.net/java/GA/jdk21.0.2/f2283984656d49d69e91c558476027ac/13/GPL/openjdk-21.0.2_windows-x64_bin.zip
 
 if exist "%PROGRAMFILES%\Java\openjdk\jdk-%jdk_version%" (
     echo %PROGRAMFILES%\Java\openjdk\jdk-%jdk_version% already exists, skipping install

@@ -1,4 +1,5 @@
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.internal.logging.ConsoleRenderer
 
 buildscript {
     repositories {
@@ -6,10 +7,10 @@ buildscript {
     }
     dependencies {
         classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.17'
-        classpath 'com.google.gradle:osdetector-gradle-plugin:1.6.0'
-        classpath 'com.github.jengelman.gradle.plugins:shadow:5.2.0'
-        classpath 'org.springframework.boot:spring-boot-gradle-plugin:2.6.3'
-        classpath 'com.gradle:gradle-enterprise-gradle-plugin:3.7' // added for windows build verfication-metadata.xml error
+        classpath 'com.google.gradle:osdetector-gradle-plugin:1.7.3'
+        classpath 'com.github.johnrengelman:shadow:8.1.1'
+        classpath 'org.springframework.boot:spring-boot-gradle-plugin:3.2.3'
+        classpath 'com.gradle:gradle-enterprise-gradle-plugin:3.16.1' // added for windows build verification-metadata.xml error
     }
 }
 
@@ -27,8 +28,10 @@ configure(subprojects) {
     apply plugin: 'com.google.osdetector'
     // Apply the jacoco plugin to add support for test coverage
     apply plugin: 'jacoco'
+    apply plugin: 'jacoco-report-aggregation'
+    apply plugin: 'checkstyle'
 
-    sourceCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_21
 
     ext { // in alphabetical order
         bcVersion = '1.63'
@@ -44,16 +47,16 @@ configure(subprojects) {
         fontawesomefxMaterialdesignfontVersion = '2.0.26-9.1.2'
         grpcVersion = '1.42.1'
         gsonVersion = '2.8.5'
-        guavaVersion = '30.1.1-jre'
-        guiceVersion = '4.2.2'
-        moneroJavaVersion = '0.7.11'
+        guavaVersion = '32.1.1-jre'
+        guiceVersion = '7.0.0'
+        moneroJavaVersion = '0.8.36'
         httpclient5Version = '5.0'
-        hamcrestVersion = '1.3'
+        hamcrestVersion = '2.2'
         httpclientVersion = '4.5.12'
         httpcoreVersion = '4.4.13'
         ioVersion = '2.6'
         jacksonVersion = '2.12.1'
-        javafxVersion = '16'
+        javafxVersion = '21.0.2'
         javaxAnnotationVersion = '1.2'
         jcsvVersion = '1.4.0'
         jetbrainsAnnotationsVersion = '13.0'
@@ -61,15 +64,14 @@ configure(subprojects) {
         joptVersion = '5.0.4'
         jsonsimpleVersion = '1.1.1'
         jsonrpc4jVersion = '1.6.0.bisq.1'
-        junitVersion = '4.12'
-        jupiterVersion = '5.7.0'
+        jupiterVersion = '5.9.2'
         kotlinVersion = '1.3.41'
         langVersion = '3.11'
         logbackVersion = '1.1.11'
         loggingVersion = '1.2'
-        lombokVersion = '1.18.24'
-        mockitoVersion = '4.0.0'
-        netlayerVersion = '6797461310f077bbea4f43a3a509c077b0ed8c34' // Netlayer version 0.7.3 with Tor browser version 11.0.14 and tor binary version: 0.4.7.7
+        lombokVersion = '1.18.30'
+        mockitoVersion = '5.10.0'
+        netlayerVersion = '700ec94f0f' // Tor browser version 14.0.3 and tor binary version: 0.4.8.13
         protobufVersion = '3.19.1'
         protocVersion = protobufVersion
         pushyVersion = '0.13.2'
@@ -87,24 +89,40 @@ configure(subprojects) {
         maven { url 'https://mvnrepository.com' }
     }
 
-    dependencies {
-        testImplementation "junit:junit:$junitVersion"
-    }
-
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
     }
 
-    jacocoTestReport {
-        reports {
-            xml.enabled true
-            html.enabled false
+    checkstyle {
+        toolVersion = '10.8.1'
+        // https://raw.githubusercontent.com/checkstyle/checkstyle/checkstyle-10.8.1/src/main/resources/google_checks.xml
+        configFile = rootProject.file("$rootDir/config/checkstyle/checkstyle.xml")
+    }
+
+    tasks.withType(Checkstyle) {
+        minHeapSize.set('200m')
+        maxHeapSize.set('1g')
+    }
+
+    jacoco {
+        toolVersion = "0.8.10"
+        reportsDirectory = file("$rootDir/build/reports/jacoco")
+    }
+
+    test.finalizedBy {
+        testCodeCoverageReport {
+            // tests are required to run before generating the report
+            reports {
+                xml.required.set(true)
+                html.required.set(false)
+            }
         }
     }
-    // Codacy report generated with every build at assets/build/reports/jacoco/test/jacocoTestReport.xml
-    test.finalizedBy jacocoTestReport
-}
 
+    test {
+        useJUnitPlatform()
+    }
+}
 
 configure([project(':cli'),
            project(':daemon'),
@@ -145,18 +163,33 @@ configure([project(':cli'),
 
             // edit generated shell scripts such that they expect to be executed in the
             // project root dir as opposed to a 'bin' subdirectory
-            def windowsScriptFile = file("${rootProject.projectDir}/haveno-${applicationName}.bat")
-            windowsScriptFile.text = windowsScriptFile.text.replace(
-                'set APP_HOME=%DIRNAME%..', 'set APP_HOME=%DIRNAME%')
+            if (osdetector.os == 'windows') {
+                def windowsScriptFile = file("${rootProject.projectDir}/haveno-${applicationName}.bat")
+                windowsScriptFile.text = windowsScriptFile.text.replace(
+                    'set APP_HOME=%DIRNAME%..', 'set APP_HOME=%DIRNAME%')
 
-            def unixScriptFile = file("${rootProject.projectDir}/haveno-$applicationName")
-            unixScriptFile.text = unixScriptFile.text.replace(
-                'APP_HOME=$( cd "${APP_HOME:-./}.." && pwd -P ) || exit', 'APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit')
+                if (applicationName == 'desktop') {
+                    windowsScriptFile.text = windowsScriptFile.text.replace(
+                        'DEFAULT_JVM_OPTS=', 'DEFAULT_JVM_OPTS=-XX:MaxRAM=4g ' +
+                            '--add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED ' +
+                            '--add-opens=javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED ' +
+                            '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED ' +
+                            '--add-opens=javafx.graphics/com.sun.javafx.scene=ALL-UNNAMED')
+                }
+            }
+            else {
+                def unixScriptFile = file("${rootProject.projectDir}/haveno-$applicationName")
+                unixScriptFile.text = unixScriptFile.text.replace(
+                    'APP_HOME=$( cd "${APP_HOME:-./}.." > /dev/null && pwd -P ) || exit', 'APP_HOME=$( cd "${APP_HOME:-./}" > /dev/null && pwd -P ) || exit')
 
-            if (applicationName == 'desktop') {
-                def script = file("${rootProject.projectDir}/haveno-$applicationName")
-                script.text = script.text.replace(
-                    'DEFAULT_JVM_OPTS=""', 'DEFAULT_JVM_OPTS="-XX:MaxRAM=4g"')
+                if (applicationName == 'desktop') {
+                    unixScriptFile.text = unixScriptFile.text.replace(
+                        'DEFAULT_JVM_OPTS=""', 'DEFAULT_JVM_OPTS="-XX:MaxRAM=4g ' +
+                            '--add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED ' +
+                            '--add-opens=javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED ' +
+                            '--add-opens=java.base/java.lang.reflect=ALL-UNNAMED ' +
+                            '--add-opens=javafx.graphics/com.sun.javafx.scene=ALL-UNNAMED"')
+                }
             }
 
             if (applicationName == 'apitest') {
@@ -238,6 +271,9 @@ configure(project(':assets')) {
         implementation "com.google.guava:guava:$guavaVersion"
         implementation "org.apache.commons:commons-lang3:$langVersion"
         implementation "org.slf4j:slf4j-api:$slf4jVersion"
+        testImplementation "org.hamcrest:hamcrest:$hamcrestVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
     }
 }
 
@@ -273,15 +309,16 @@ configure(project(':common')) {
         implementation "org.bouncycastle:bcpg-jdk15on:$bcVersion"
         implementation "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
         implementation "org.slf4j:slf4j-api:$slf4jVersion"
-        testImplementation "org.hamcrest:hamcrest-all:$hamcrestVersion"
+        testImplementation "org.hamcrest:hamcrest:$hamcrestVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
         runtimeOnly("io.grpc:grpc-netty-shaded:$grpcVersion") {
             exclude(module: 'guava')
             exclude(module: 'animal-sniffer-annotations')
         }
 
-        // override transitive dependency version from 1.5 to the same version just identified by commit number.
-        // Remove this if transitive dependency is changed to something else than 1.5
-        implementation(group: 'com.github.JesusMcCloud', name: 'jtorctl') { version { strictly "[9b5ba2036b]" } }
+        // override transitive dependency and use latest version from bisq
+        implementation(group: 'com.github.bisq-network', name: 'jtorctl') { version { strictly "[b2a172f44edcd8deaa5ed75d936dcbb007f0d774]" } }
         implementation "org.openjfx:javafx-base:$javafxVersion:$os"
         implementation "org.openjfx:javafx-graphics:$javafxVersion:$os"
     }
@@ -297,10 +334,11 @@ configure(project(':p2p')) {
         implementation "com.google.protobuf:protobuf-java:$protobufVersion"
         implementation "org.fxmisc.easybind:easybind:$easybindVersion"
         implementation "org.slf4j:slf4j-api:$slf4jVersion"
-        implementation("com.github.bisq-network.netlayer:tor.external:$netlayerVersion") {
+        implementation "org.apache.commons:commons-lang3:$langVersion"
+        implementation("com.github.haveno-dex.netlayer:tor.external:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
-        implementation("com.github.bisq-network.netlayer:tor.native:$netlayerVersion") {
+        implementation("com.github.haveno-dex.netlayer:tor.native:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
         implementation("com.github.bisq-network:bitcoinj:$bitcoinjVersion") {
@@ -320,10 +358,14 @@ configure(project(':p2p')) {
         }
         testAnnotationProcessor "org.projectlombok:lombok:$lombokVersion"
         testCompileOnly "org.projectlombok:lombok:$lombokVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-params:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
         testImplementation "ch.qos.logback:logback-classic:$logbackVersion"
         testImplementation "ch.qos.logback:logback-core:$logbackVersion"
         testImplementation "org.apache.commons:commons-lang3:$langVersion"
         testImplementation("org.mockito:mockito-core:$mockitoVersion")
+        testImplementation("org.mockito:mockito-junit-jupiter:$mockitoVersion")
 
         implementation "org.openjfx:javafx-base:$javafxVersion:$os"
         implementation "org.openjfx:javafx-graphics:$javafxVersion:$os"
@@ -358,10 +400,10 @@ configure(project(':core')) {
         implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion") {
             exclude(module: 'jackson-annotations')
         }
-        implementation("com.github.bisq-network.netlayer:tor.native:$netlayerVersion") {
+        implementation("com.github.haveno-dex.netlayer:tor.native:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
-        implementation("com.github.bisq-network.netlayer:tor.external:$netlayerVersion") {
+        implementation("com.github.haveno-dex.netlayer:tor.external:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
         implementation("com.github.bisq-network:bitcoinj:$bitcoinjVersion") {
@@ -386,12 +428,14 @@ configure(project(':core')) {
         testAnnotationProcessor "org.projectlombok:lombok:$lombokVersion"
         testCompileOnly "org.projectlombok:lombok:$lombokVersion"
         testImplementation "com.natpryce:make-it-easy:$easyVersion"
-        testImplementation "org.hamcrest:hamcrest-all:$hamcrestVersion"
+        testImplementation "org.hamcrest:hamcrest:$hamcrestVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
         testImplementation "org.mockito:mockito-core:$mockitoVersion"
 
         implementation "org.openjfx:javafx-base:$javafxVersion:$os"
         implementation "org.openjfx:javafx-graphics:$javafxVersion:$os"
-        implementation("io.github.monero-ecosystem:monero-java:$moneroJavaVersion") {
+        implementation("io.github.woodser:monero-java:$moneroJavaVersion") {
             exclude(module: 'jackson-core')
             exclude(module: 'jackson-annotations')
             exclude(module: 'jackson-databind')
@@ -404,16 +448,23 @@ configure(project(':core')) {
         systemProperty 'jdk.attach.allowAttachSelf', true
     }
 
+    task generateKeypairs(type: JavaExec) {
+        mainClass = 'haveno.core.util.GenerateKeyPairs'
+        classpath = sourceSets.main.runtimeClasspath
+    }
+
     task havenoDeps {
         doLast {
             // get monero binaries download url
             Map moneroBinaries = [
-                'linux'         : 'https://github.com/haveno-dex/monero/releases/download/testing8/monero-bins-haveno-linux.tar.gz',
-                'linux-sha256'  : 'a222bdae08e5464d1b751e6301144a904578bef37c75444c46aef762299c0b92',
-                'mac'           : 'https://github.com/haveno-dex/monero/releases/download/testing8/monero-bins-haveno-mac.tar.gz',
-                'mac-sha256'    : 'fbebd9eb40550cd992bf9e1f946741d5adc564c428b9d4c78981363235c4be89',
-                'windows'       : 'https://github.com/haveno-dex/monero/releases/download/testing8/monero-bins-haveno-windows.zip',
-                'windows-sha256': 'c9e6150ba9cb8b35b7c63ac8786610e3c37725a973e35c09e6fbbfe20430302a'
+                'linux-x86_64'         : 'https://github.com/haveno-dex/monero/releases/download/release5/monero-bins-haveno-linux-x86_64.tar.gz',
+                'linux-x86_64-sha256'  : '92003b6d9104e8fe3c4dff292b782ed9b82b157aaff95200fda35e5c3dcb733a',
+                'linux-aarch64'        : 'https://github.com/haveno-dex/monero/releases/download/release5/monero-bins-haveno-linux-aarch64.tar.gz',
+                'linux-aarch64-sha256' : '18b069c6c474ce18efea261c875a4d54022520e888712b2a56524d9c92f133b1',
+                'mac'                  : 'https://github.com/haveno-dex/monero/releases/download/release5/monero-bins-haveno-mac.tar.gz',
+                'mac-sha256'           : 'd308352191cd5a9e5e3932ad15869e033e22e209de459f4fd6460b111377dae2',
+                'windows'              : 'https://github.com/haveno-dex/monero/releases/download/release5/monero-bins-haveno-windows.zip',
+                'windows-sha256'       : '9c9e1994d4738e2a89ca28bef343bcad460ea6c06e0dd40de8278ab3033bd6c7'
             ]
 
             String osKey
@@ -422,7 +473,12 @@ configure(project(':core')) {
             } else if (Os.isFamily(Os.FAMILY_MAC)) {
                 osKey = 'mac'
             } else {
-                osKey = 'linux'
+                String architecture = System.getProperty("os.arch").toLowerCase()
+                if (architecture.contains('aarch64') || architecture.contains('arm')) {
+                    osKey = 'linux-aarch64'
+                } else {
+                    osKey = 'linux-x86_64'
+                }
             }
 
             String moneroDownloadUrl = moneroBinaries[osKey]
@@ -450,16 +506,16 @@ configure(project(':core')) {
                 } else {
                     ext.extractArchiveTarGz(moneroArchiveFile, localnetDir)
                 }
+            }
 
-                // add the current platform's monero dependencies into the resources folder for installation
-                copy {
-                    from "${monerodFile}"
-                    into "${project(':core').projectDir}/src/main/resources/bin"
-                }
-                copy {
-                    from "${moneroRpcFile}"
-                    into "${project(':core').projectDir}/src/main/resources/bin"
-                }
+            // add the current platform's monero dependencies into the resources folder for installation
+            copy {
+                from "${monerodFile}"
+                into "${project(':core').projectDir}/src/main/resources/bin"
+            }
+            copy {
+                from "${moneroRpcFile}"
+                into "${project(':core').projectDir}/src/main/resources/bin"
             }
         }
 
@@ -481,6 +537,7 @@ configure(project(':core')) {
 
         ext.downloadAndVerifyDependencies = { String archiveURL, String archiveSHA256, File destinationArchiveFile ->
             ext.dependencyDownloadedAndVerified = false
+
             // if archive exists, check to see if its already up to date
             if (destinationArchiveFile.exists()) {
                 println "Verifying existing archive ${destinationArchiveFile}"
@@ -494,14 +551,15 @@ configure(project(':core')) {
                 }
             }
 
+            // download archives
             println "Downloading ${archiveURL}"
             ant.get(src: archiveURL, dest: destinationArchiveFile)
             println 'Download saved to ' + destinationArchiveFile
 
+            // verify checksum
             println 'Verifying checksum for downloaded binary ...'
             ant.archiveHash = archiveSHA256
-            // use a different verifyProperty name from existing verification or it will always fail
-            ant.checksum(file: destinationArchiveFile, algorithm: 'SHA-256', property: '${archiveHash}', verifyProperty: 'downloadedHashMatches')
+            ant.checksum(file: destinationArchiveFile, algorithm: 'SHA-256', property: '${archiveHash}', verifyProperty: 'downloadedHashMatches') // use a different verifyProperty name from existing verification or it will always fail
             if (ant.properties['downloadedHashMatches'] != 'true') {
                 ant.fail('Checksum mismatch: Downloaded archive has a different checksum than expected')
             }
@@ -514,7 +572,7 @@ configure(project(':core')) {
 }
 
 configure(project(':cli')) {
-    mainClassName = 'bisq.cli.CliMain'
+    mainClassName = 'haveno.cli.CliMain'
 
     dependencies {
         implementation project(':proto')
@@ -544,11 +602,7 @@ configure(project(':cli')) {
         testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
         testImplementation "org.junit.jupiter:junit-jupiter-params:$jupiterVersion"
         testRuntimeOnly "javax.annotation:javax.annotation-api:$javaxAnnotationVersion"
-        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
-    }
-
-    test {
-        useJUnitPlatform()
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
     }
 }
 
@@ -556,13 +610,14 @@ configure(project(':desktop')) {
     apply plugin: 'com.github.johnrengelman.shadow'
     apply from: 'package/package.gradle'
 
-    version = '1.0.0-SNAPSHOT'
+    version = '1.0.18-SNAPSHOT'
 
     jar.manifest.attributes(
         "Implementation-Title": project.name,
-        "Implementation-Version": version)
+        "Implementation-Version": version,
+        "CFBundleVersion": version)
 
-    mainClassName = 'bisq.desktop.app.HavenoAppMain'
+    mainClassName = 'haveno.desktop.app.HavenoAppMain'
 
     tasks.withType(AbstractArchiveTask) {
         preserveFileTimestamps = false
@@ -612,8 +667,11 @@ configure(project(':desktop')) {
         testCompileOnly "org.projectlombok:lombok:$lombokVersion"
         testImplementation "com.natpryce:make-it-easy:$easyVersion"
         testImplementation "org.mockito:mockito-core:$mockitoVersion"
+        testImplementation "org.hamcrest:hamcrest:$hamcrestVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
 
-        implementation("io.github.monero-ecosystem:monero-java:$moneroJavaVersion") {
+        implementation("io.github.woodser:monero-java:$moneroJavaVersion") {
             exclude(module: 'jackson-core')
             exclude(module: 'jackson-annotations')
             exclude(module: 'jackson-databind')
@@ -634,14 +692,7 @@ configure(project(':desktop')) {
 
 
 configure(project(':monitor')) {
-    mainClassName = 'bisq.monitor.Monitor'
-
-    test {
-        useJUnitPlatform()
-        testLogging {
-            events "passed", "skipped", "failed"
-        }
-    }
+    mainClassName = 'haveno.monitor.Monitor'
 
     dependencies {
         implementation project(':assets')
@@ -654,10 +705,10 @@ configure(project(':monitor')) {
         implementation "ch.qos.logback:logback-core:$logbackVersion"
         implementation "com.google.guava:guava:$guavaVersion"
         implementation "org.slf4j:slf4j-api:$slf4jVersion"
-        implementation("com.github.bisq-network.netlayer:tor.external:$netlayerVersion") {
+        implementation("com.github.haveno-dex.netlayer:tor.external:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
-        implementation("com.github.bisq-network.netlayer:tor.native:$netlayerVersion") {
+        implementation("com.github.haveno-dex.netlayer:tor.native:$netlayerVersion") {
             exclude(module: 'slf4j-api')
         }
         implementation("com.google.inject:guice:$guiceVersion") {
@@ -667,7 +718,7 @@ configure(project(':monitor')) {
         testCompileOnly "org.projectlombok:lombok:$lombokVersion"
         testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
         testImplementation "org.junit.jupiter:junit-jupiter-params:$jupiterVersion"
-        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
 
         implementation "org.openjfx:javafx-base:$javafxVersion:$os"
         implementation "org.openjfx:javafx-graphics:$javafxVersion:$os"
@@ -676,7 +727,7 @@ configure(project(':monitor')) {
 
 
 configure(project(':relay')) {
-    mainClassName = 'bisq.relay.RelayMain'
+    mainClassName = 'haveno.relay.RelayMain'
 
     dependencies {
         implementation project(':common')
@@ -699,7 +750,7 @@ configure(project(':relay')) {
 configure(project(':seednode')) {
     apply plugin: 'com.github.johnrengelman.shadow'
 
-    mainClassName = 'bisq.seednode.SeedNodeMain'
+    mainClassName = 'haveno.seednode.SeedNodeMain'
 
     dependencies {
         implementation project(':common')
@@ -713,12 +764,14 @@ configure(project(':seednode')) {
             exclude(module: 'guava')
         }
         testImplementation "org.mockito:mockito-core:$mockitoVersion"
+        testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
     }
 }
 
 
 configure(project(':statsnode')) {
-    mainClassName = 'bisq.statistics.StatisticsMain'
+    mainClassName = 'haveno.statistics.StatisticsMain'
 
     dependencies {
         implementation project(':common')
@@ -734,7 +787,7 @@ configure(project(':statsnode')) {
 }
 
 configure(project(':daemon')) {
-    mainClassName = 'bisq.daemon.app.HavenoDaemonMain'
+    mainClassName = 'haveno.daemon.app.HavenoDaemonMain'
 
     dependencies {
         implementation project(':proto')
@@ -782,7 +835,7 @@ configure(project(':daemon')) {
         testImplementation "org.junit.jupiter:junit-jupiter-params:$jupiterVersion"
         testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
 
-        implementation("io.github.monero-ecosystem:monero-java:$moneroJavaVersion") {
+        implementation("io.github.woodser:monero-java:$moneroJavaVersion") {
             exclude(module: 'jackson-core')
             exclude(module: 'jackson-annotations')
             exclude(module: 'jackson-databind')
@@ -797,7 +850,7 @@ configure(project(':daemon')) {
 configure(project(':inventory')) {
     apply plugin: 'com.github.johnrengelman.shadow'
 
-    mainClassName = 'bisq.inventory.InventoryMonitorMain'
+    mainClassName = 'haveno.inventory.InventoryMonitorMain'
 
     dependencies {
         implementation project(':common')
@@ -817,7 +870,7 @@ configure(project(':inventory')) {
 }
 
 configure(project(':apitest')) {
-    mainClassName = 'bisq.apitest.ApiTestMain'
+    mainClassName = 'haveno.apitest.ApiTestMain'
 
     // We have to disable the :apitest 'test' task by default because we do not want
     // to interfere with normal builds.  To run JUnit tests in this subproject:
@@ -826,7 +879,6 @@ configure(project(':apitest')) {
     test.enabled = System.getProperty("runApiTests") == "true"
 
     test {
-        useJUnitPlatform()
         outputs.upToDateWhen { false }          // Don't use previously cached test outputs.
         testLogging {
             showStackTraces = true              // Show full stack traces in the console.
@@ -847,7 +899,7 @@ configure(project(':apitest')) {
                 // Show report link if all tests passed in case you want to see more detail, stdout, skipped, etc.
                 if (result.resultType == TestResult.ResultType.SUCCESS) {
                     DirectoryReport htmlReport = getReports().getHtml()
-                    String reportUrl = new org.gradle.internal.logging.ConsoleRenderer()
+                    String reportUrl = new ConsoleRenderer()
                         .asClickableFileUrl(htmlReport.getEntryPoint())
                     println("REPORT  " + reportUrl)
                 }
@@ -896,7 +948,7 @@ configure(project(':apitest')) {
         testImplementation "org.junit.jupiter:junit-jupiter-api:$jupiterVersion"
         testImplementation "org.junit.jupiter:junit-jupiter-params:$jupiterVersion"
         testRuntimeOnly "javax.annotation:javax.annotation-api:$javaxAnnotationVersion"
-        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$jupiterVersion"
     }
 }
 

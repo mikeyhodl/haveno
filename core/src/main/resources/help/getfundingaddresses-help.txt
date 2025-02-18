@@ -2,7 +2,7 @@ getfundingaddresses
 
 NAME
 ----
-getfundingaddresses - list BTC receiving address
+getfundingaddresses - list XMR receiving address
 
 SYNOPSIS
 --------
@@ -10,8 +10,8 @@ getfundingaddresses
 
 DESCRIPTION
 -----------
-Returns a list of receiving BTC addresses.
+Returns a list of receiving XMR addresses.
 
 EXAMPLES
 --------
-$ ./bisq-cli --password=xyz --port=9998 getfundingaddresses
+$ ./haveno-cli --password=xyz --port=9998 getfundingaddresses

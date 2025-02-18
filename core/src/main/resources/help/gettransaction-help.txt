@@ -11,17 +11,17 @@ gettransaction
 
 DESCRIPTION
 -----------
-Returns a very brief summary of a BTC transaction created by the Bisq server.
+Returns a very brief summary of a XMR transaction created by the Haveno server.
 
-To see full transaction details, use a bitcoin-core client or an online block explorer.
+To see full transaction details, use a monero-core client or an online block explorer.
 
 OPTIONS
 -------
 --transaction-id
-		The ID of the BTC transaction.
+		The ID of the XMR transaction.
 
 EXAMPLES
 --------
 To see the summary of a transaction with ID 282dc2a5755219a49ee9f6d46a31a2cbaec6624beba96548180eccb1f004cdd8:
-$ ./bisq-cli --password=xyz --port=9998 gettransaction \
+$ ./haveno-cli --password=xyz --port=9998 gettransaction \
     --transaction-id=282dc2a5755219a49ee9f6d46a31a2cbaec6624beba96548180eccb1f004cdd8

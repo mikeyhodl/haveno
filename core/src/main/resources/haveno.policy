@@ -16,12 +16,12 @@ grant {
   permission "java.util.PropertyPermission" "maxConnections", "read";
   permission "java.util.PropertyPermission" "networkId", "read";
   permission "java.util.PropertyPermission" "banList", "read";
-  permission "java.util.PropertyPermission" "socks5ProxyBtcAddress", "read";
+  permission "java.util.PropertyPermission" "socks5ProxyXmrAddress", "read";
   permission "java.util.PropertyPermission" "socks5ProxyHttpAddress", "read";
   permission "java.util.PropertyPermission" "useragent.name", "read";
   permission "java.util.PropertyPermission" "useragent.version", "read";
   permission "java.util.PropertyPermission" "walletDir", "read";
-  permission "java.util.PropertyPermission" "useTorForBtc", "read";
+  permission "java.util.PropertyPermission" "useTorForXmr", "read";
   permission "java.util.PropertyPermission" "providers", "read";
   permission "java.util.PropertyPermission" "rpcUser", "read";
   permission "java.util.PropertyPermission" "rpcPassword", "read";
@@ -38,13 +38,13 @@ grant {
   permission "java.util.PropertyPermission" "nodePort", "read";
   permission "java.util.PropertyPermission" "seedNodes", "read";
   permission "java.util.PropertyPermission" "bitcoinRegtestHost", "read";
-  permission "java.util.PropertyPermission" "btcNodes", "read";
+  permission "java.util.PropertyPermission" "xmrNodes", "read";
   permission "java.util.PropertyPermission" "appName", "read";
   permission "java.util.PropertyPermission" "socks5DiscoverMode", "read";
   permission "java.util.PropertyPermission" "priceFeedProviders", "read";
   permission "java.util.PropertyPermission" "maxMemory", "read";
 
-  /* Why ??? no permission exceptions, no dependency in bisq nor in bitcoinj. Local problem? */
+  /* Why ??? no permission exceptions, no dependency in haveno nor in bitcoinj. Local problem? */
   permission "java.util.PropertyPermission" "com.google.appengine.runtime.environment", "read";
 
   permission "java.lang.RuntimePermission" "accessDeclaredMembers";
@@ -64,12 +64,12 @@ grant {
   permission "java.lang.RuntimePermission" "getenv.maxConnections";
   permission "java.lang.RuntimePermission" "getenv.networkId";
   permission "java.lang.RuntimePermission" "getenv.banList";
-  permission "java.lang.RuntimePermission" "getenv.socks5ProxyBtcAddress";
+  permission "java.lang.RuntimePermission" "getenv.socks5ProxyXmrAddress";
   permission "java.lang.RuntimePermission" "getenv.socks5ProxyHttpAddress";
   permission "java.lang.RuntimePermission" "getenv.useragent.name";
   permission "java.lang.RuntimePermission" "getenv.useragent.version";
   permission "java.lang.RuntimePermission" "getenv.walletDir";
-  permission "java.lang.RuntimePermission" "getenv.useTorForBtc";
+  permission "java.lang.RuntimePermission" "getenv.useTorForXmr";
   permission "java.lang.RuntimePermission" "getenv.providers";
   permission "java.lang.RuntimePermission" "getenv.rpcPassword";
   permission "java.lang.RuntimePermission" "getenv.rpcUser";
@@ -84,7 +84,7 @@ grant {
   permission "java.lang.RuntimePermission" "getenv.priceFeedProviders";
   permission "java.lang.RuntimePermission" "getenv.seedNodes";
   permission "java.lang.RuntimePermission" "getenv.bitcoinRegtestHost";
-  permission "java.lang.RuntimePermission" "getenv.btcNodes";
+  permission "java.lang.RuntimePermission" "getenv.xmrNodes";
   permission "java.lang.RuntimePermission" "getenv.maxMemory";
   permission "java.lang.RuntimePermission" "getClassLoader";
   permission "java.lang.RuntimePermission" "accessUserInformation";
@@ -93,15 +93,15 @@ grant {
 
   /* user data dir for Mac, Linux, Windows */
   permission "java.io.FilePermission" "${user.home}${/}Library${/}Application Support${/}-", "read,write,delete";
-  permission "java.io.FilePermission" "${user.home}${/}.local${/}share${/}bisq-", "read,write,delete";
-  permission "java.io.FilePermission" "${appdata}${/}bisq-", "read,write,delete";
+  permission "java.io.FilePermission" "${user.home}${/}.local${/}share${/}haveno-", "read,write,delete";
+  permission "java.io.FilePermission" "${appdata}${/}haveno-", "read,write,delete";
 
   /* temp dir Mac, Linux, Windows TODO */
   permission "java.io.FilePermission" "/var/folders/-", "read,write,delete";
 
   /* only for dev
   permission "java.io.FilePermission" "${user.home}${/}.m2${/}-", "read";
-  permission "java.io.FilePermission" "/Users/me/dev/bitcoin_projects/bisq/-", "read";
+  permission "java.io.FilePermission" "/Users/me/dev/bitcoin_projects/haveno/-", "read";
   permission "java.lang.reflect.ReflectPermission" "suppressAccessChecks";
 */
 

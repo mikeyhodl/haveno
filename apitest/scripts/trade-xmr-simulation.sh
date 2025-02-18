@@ -6,14 +6,14 @@
 #
 #  - Linux or OSX with bash, Java 11-15 (JDK language compatibility 11), and bitcoin-core (v0.19 -  v22).
 #
-#  - Bisq must be fully built with apitest dao setup files installed.
+#  - Haveno must be fully built with apitest dao setup files installed.
 #    Build command:  `./gradlew clean build :apitest:installDaoSetup`
 #
 #  - All supporting nodes must be run locally, in dev/dao/regtest mode:
 #           bitcoind, seednode, arbdaemon, alicedaemon, bobdaemon
 #
 #    These should be run using the apitest harness.  From the root project dir, run:
-#    `$ ./bisq-apitest --apiPassword=xyz --supportingApps=bitcoind,seednode,arbdaemon,alicedaemon,bobdaemon --shutdownAfterTests=false`
+#    `$ ./haveno-apitest --apiPassword=xyz --supportingApps=bitcoind,seednode,arbdaemon,alicedaemon,bobdaemon --shutdownAfterTests=false`
 #
 # Usage:
 #
@@ -52,7 +52,7 @@ printbreak
 
 registerdisputeagents
 
-# Demonstrate how to create an XMR altcoin payment account.
+# Demonstrate how to create an XMR payment account.
 
 printdate "Create Alice's XMR Trading Payment Account."
 # Note: Having problems passing a double quoted --account-name param to function.
